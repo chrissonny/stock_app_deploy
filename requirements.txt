@@ -5,4 +5,4 @@ yfinance
 altair
 twstock
 pyngrok
-lml
+lxml
