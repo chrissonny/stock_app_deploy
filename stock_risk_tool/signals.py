@@ -1,6 +1,47 @@
 import numpy as np
 import pandas as pd
 
+def _future_window_max(series, lookahead):
+    reversed_series = series.iloc[::-1]
+    future_max = (
+        reversed_series.rolling(window=lookahead, min_periods=1)
+        .max()
+        .iloc[::-1]
+    )
+    return future_max
+
+
+def detect_sell_before_rise(
+    df,
+    lookahead=3,
+    rise_threshold=0.02,
+    price_col="Close",
+    signal_col="Sell_Signal",
+    use_high=False,
+    high_col="High",
+):
+    """
+    偵測賣出後短期內價格上漲 (賣在起漲前) 的情況。
+
+    Args:
+        df: 包含價格與賣出訊號的 DataFrame
+        lookahead: 觀察未來幾根 (天/週等) K 線
+        rise_threshold: 未來最大漲幅閾值 (如 0.02 = 2%)
+        price_col: 當前價格欄位 (用於計算漲幅)
+        signal_col: 賣出訊號欄位名稱
+        use_high: 是否使用 High 來判斷未來最大漲幅
+        high_col: 最高價欄位名稱
+
+    Returns:
+        tuple: (sell_before_rise_flag, rise_pct)
+    """
+    future_col = high_col if use_high else price_col
+    future_max = _future_window_max(df[future_col].shift(-1), lookahead)
+    rise_pct = (future_max / df[price_col]) - 1
+    sell_before_rise = df[signal_col] & (rise_pct >= rise_threshold)
+    return sell_before_rise.fillna(False), rise_pct
+
+
 def generate_signals(df, p, mode, stock_type="DEFAULT"):
     """
     產生買賣訊號 - 重構版
@@ -160,6 +201,21 @@ def generate_signals(df, p, mode, stock_type="DEFAULT"):
         sell_stopline |    # 趨勢停損
         hard_stop          # 硬停損
     )
+
+    # ========================================================
+    # 賣在起漲前判斷
+    # ========================================================
+    sell_lookahead = p.get("SELL_LOOKAHEAD", 3)
+    sell_rise_threshold = p.get("SELL_PREMATURE_THRESHOLD", 0.02)
+    sell_use_high = p.get("SELL_PREMATURE_USE_HIGH", False)
+    sell_before_rise, sell_rise_pct = detect_sell_before_rise(
+        df,
+        lookahead=sell_lookahead,
+        rise_threshold=sell_rise_threshold,
+        use_high=sell_use_high,
+    )
+    df["Sell_Premature"] = sell_before_rise
+    df["Sell_Premature_RisePct"] = sell_rise_pct.fillna(0)
     
     # ========================================================
     # 賣出原因標記 (優先級排序)

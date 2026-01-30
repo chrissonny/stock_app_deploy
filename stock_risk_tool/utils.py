@@ -50,6 +50,8 @@ def ensure_schema(df, stage="signals"):
         "Sell_Signal": False,
         "Sell_Core": False,
         "Sell_StopLine": False,
+        "Sell_Premature": False,
+        "Sell_Premature_RisePct": 0.0,
         
         # 原因標記
         "Buy_Reason": "NONE",
@@ -62,7 +64,7 @@ def ensure_schema(df, stage="signals"):
             df[col] = default_val
 
     # 確保布林值欄位正確型別
-    bool_cols = ["Buy_Signal", "Sell_Signal", "Sell_Core", "Sell_StopLine"]
+    bool_cols = ["Buy_Signal", "Sell_Signal", "Sell_Core", "Sell_StopLine", "Sell_Premature"]
     for c in bool_cols:
         if c in df.columns:
             df[c] = df[c].fillna(False).astype(bool)
